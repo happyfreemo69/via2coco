@@ -1,0 +1,18 @@
+{
+    "name": "via2coco",
+    "version": "1.0.0",
+    "description": "vgg/via json to coco",
+    "author": "mpech",
+    "devDependencies": {
+        "mocha": "3.0.0"
+    },
+    "license": "MIT",
+    "dependencies": {
+        "area-polygon": "^1.0.1",
+        "image-size": "0.6.2",
+        "mkdirp": "0.5.1",
+        "nodelibs": "git://github.com/happyfreemo69/nodelibs.git#v1.10.21",
+        "optimist": "0.6.1",
+        "yargs": "11.0.0"
+    }
+}
