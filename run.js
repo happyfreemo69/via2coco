@@ -27,7 +27,7 @@ if(argv.help){
 var { promisify } = require('util');
 var input = argv.input;
 var output = argv.output;
-var input = '/home/mpech/dl/test.json'
+
 /**
  * [makeTree description]
  * @param  {output:String} opts [description]
@@ -81,7 +81,6 @@ function writeAnnotations(fname, json){
 
 var sizeOf = promisify(require('image-size'));
 function extractSize(fname){
-    fname = fname.replace('/home/mpech', '/mnt/tb/')
     return sizeOf(fname);
 }
 
@@ -119,12 +118,40 @@ function bboxFrom(xs, ys){
  * @return {[type]}           [description]
  */
 function extractAnnotations(img, categPool, ctx){
+    function createAnno(k,subK, area, bbox, pol){
+        return {
+            id:ctx.annoId++,
+            image_id: img.id,
+            category_id:categPool[k+'.'+subK],
+            iscrowd:0,
+            area: area,
+            bbox: bbox,
+            segmentation:[pol],
+            width: img.w,
+            height: img.h
+        }
+    }
     //'{"id":1,"image_id":1,"category_id":2,"iscrowd":0,"area":1517,"bbox":[71,51,45,45],
     //"segmentation":[[93,95.5,77.5,89,70.5,73,76.5,58,93,50.5,109,57.5,115.5,73,109.5,88,93,95.5]],"width":128,"height":128}
     var annos = [];
     img.regions.forEach((r,i)=>{
-        var xs = r.shape_attributes.all_points_x;
-        var ys = r.shape_attributes.all_points_y;
+        if(r.shape_attributes.name == 'ellipse'){
+            console.log('Ellipse not (yet) handled for '+img.filename);
+            return;
+        }
+        var xs, ys;
+        if(r.shape_attributes.name == 'rect'){
+            let rs = r.shape_attributes; 
+            let [rsx, rsy, rsw, rsh] = [rs.x, rs.y, rs.width, rs.height];
+            xs = [rsx, rsx+rsw, rsx+rsw, rsx];
+            ys = [rsy, rsy, rsy+rsh, rsy+rsh];
+        }else{
+            xs = r.shape_attributes.all_points_x;
+            ys = r.shape_attributes.all_points_y;
+        }
+        if(!xs || !ys){
+            throw 'no coordinate but shape found'+JSON.stringify(r.shape_attributes);
+        }
         var pol  = xs.reduce((acc,x,i)=>{
             acc.push(x);
             acc.push(ys[i]);
@@ -135,19 +162,16 @@ function extractAnnotations(img, categPool, ctx){
         var area = computeArea(xs, ys);
 
         Object.keys(r.region_attributes).forEach(k=>{
-            return Object.keys(r.region_attributes[k]).forEach(subK=>{
-                annos.push({
-                    id:ctx.annoId++,
-                    image_id: img.id,
-                    category_id:categPool[k+'.'+subK],
-                    iscrowd:0,
-                    area: area,
-                    bbox: bbox,
-                    segmentation:[pol],
-                    width: img.w,
-                    height: img.h
-                })    
-            })
+            var attr = r.region_attributes[k];
+            if(typeof(attr)=='object'){
+                return Object.keys(r.region_attributes[k]).forEach(subK=>{
+                    annos.push(createAnno(k, subK, area, bbox, pol))
+                })
+            }else{
+//                console.log('ALL PANEL AS CP1')
+//                attr = 'cp1';
+                annos.push(createAnno(k, attr, area, bbox, pol))
+            }
         })
     });
     return Promise.resolve(annos);
@@ -162,7 +186,16 @@ function buildCategPool(json){
             Object.keys(master.options).forEach(subK=>{
                 dic[k+'.'+subK] = z++;
             })
+        }else if(master.type == 'radio'){
+            Object.keys(master.options).forEach(subK=>{
+                dic[k+'.'+subK] = z++;
+            })
+        }else if(master.type == 'dropdown'){
+            Object.keys(master.options).forEach(subK=>{
+                dic[k+'.'+subK] = z++;
+            })
         }else{
+            console.log('master : ', master)
             throw 'subattribute type not handled';
         }
     });
